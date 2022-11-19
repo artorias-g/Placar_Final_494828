@@ -3,70 +3,85 @@ package ufc.smd.esqueleto_placar
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
-import android.os.Build
-import android.os.Bundle
-import android.os.VibrationEffect
-import android.os.Vibrator
+import android.os.*
 import android.util.Log
 import android.view.View
+import android.widget.Button
+import android.widget.Chronometer
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.getSystemService
 import data.Placar
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 import java.nio.charset.StandardCharsets
-import java.util.*
 
 class PlacarActivity : AppCompatActivity() {
     lateinit var placar:Placar
-    lateinit var tvResultadoJogo: TextView
-    var game =0
+    var timeIs = 0
+    var ultimoGol = mutableListOf<Boolean>()
+    val placar1 = mutableListOf<String>()
+    val placar2 = mutableListOf<String>()
     override fun onCreate(savedInstanceState: Bundle?) {
+        placar1.add(0.toString())
+        placar2.add(0.toString())
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_placar)
-        val currentTime = Calendar.getInstance().time.toString()
-
-        val timeSinceStart = findViewById<TextView>(R.id.editTextTime)
-        placar= getIntent().getExtras()?.getSerializable("placar") as Placar
+        val simpleChronometer = findViewById<Chronometer>(R.id.simpleChronometer)
+        simpleChronometer.start()
+        var t1 = findViewById<TextView>(R.id.time1)
+        var t2 = findViewById<TextView>(R.id.time2)
+        placar = getIntent().getExtras()?.getSerializable("placar") as Placar
         if (placar.has_timer){
-            timeSinceStart.setVisibility(View.VISIBLE)
-            timeSinceStart.text = currentTime
+            simpleChronometer.setVisibility(View.VISIBLE)
+        } else {
+            simpleChronometer.setVisibility(View.INVISIBLE)
         }
         val matchName= findViewById<TextView>(R.id.tvNomePartida2)
-        tvResultadoJogo= findViewById(R.id.tvPlacar)
-        //Mudar o nome da partida
-        val tvNomePartida=findViewById(R.id.tvNomePartida2) as TextView
         matchName.text=placar.nome_partida
         ultimoJogos()
     }
-    fun alteraPlacar (v:View){
-        game++
-        if ((game % 2) != 0) {
-            placar.resultado = ""+game+" vs "+ (game-1)
-        }else{
-            placar.resultado = ""+(game-1)+" vs "+ (game-1)
-            vibrar(v)
-        }
-        tvResultadoJogo.text=placar.resultado
-    }
-    fun vibrar (v:View){
-        val buzzer = this.getSystemService<Vibrator>()
-         val pattern = longArrayOf(0, 200, 100, 300)
-         buzzer?.let {
-             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                 buzzer.vibrate(VibrationEffect.createWaveform(pattern, -1))
-             } else {
-                 //deprecated in API 26
-                 buzzer.vibrate(pattern, -1)
-             }
-         }
+    fun undo(v: View){
 
+        var t1 = findViewById<TextView>(R.id.time1)
+        var t2 = findViewById<TextView>(R.id.time2)
+        if (ultimoGol.last()){
+            ultimoGol.removeLast()
+            placar1.removeLast()
+            t1.text = placar1.last()
+        }
+        else {
+            ultimoGol.removeLast()
+            placar2.removeLast()
+            t2.text = placar2.last()
+        }
+
+    }
+    fun gol1(v: View) {
+
+        var time1 = findViewById<TextView>(R.id.time1)
+        var t1 = time1.text.toString().toInt()
+        t1 += 1
+        time1.text = t1.toString()
+        placar1.add(t1.toString())
+        ultimoGol.add(true)
+        }
+    fun gol2(v: View) {
+        var time2 = findViewById<TextView>(R.id.time2)
+        var t2 = time2.text.toString().toInt()
+        t2 += 1
+        time2.text = t2.toString()
+        placar2.add(t2.toString())
+        ultimoGol.add(false)
     }
     fun saveGame(v: View) {
 
+        var t1 = findViewById<TextView>(R.id.time1)
+        var t2 = findViewById<TextView>(R.id.time2)
+        var placarAtual = t1.text.toString()+"x"+t2.text.toString()
+        placar.resultado = placarAtual
+        placar.resultadoLongo = placarAtual
         val sharedFilename = "PreviousGames"
         val sp: SharedPreferences = getSharedPreferences(sharedFilename, Context.MODE_PRIVATE)
         var edShared = sp.edit()
@@ -86,18 +101,6 @@ class PlacarActivity : AppCompatActivity() {
         val intent = Intent(this, MainActivity::class.java).apply{}
         startActivity(intent)
     }
-    fun lerUltimosJogos(v: View){
-        val sharedFilename = "PreviousGames"
-        val sp: SharedPreferences = getSharedPreferences(sharedFilename, Context.MODE_PRIVATE)
-
-        var meuObjString:String= sp.getString("match1","").toString()
-        if (meuObjString.length >=1) {
-            var dis = ByteArrayInputStream(meuObjString.toByteArray(Charsets.ISO_8859_1))
-            var oos = ObjectInputStream(dis)
-            var placarAntigo:Placar=oos.readObject() as Placar
-            Log.v("SMD26",placar.resultado)
-        }
-    }
     fun ultimoJogos () {
         val sharedFilename = "PreviousGames"
         val sp:SharedPreferences = getSharedPreferences(sharedFilename,Context.MODE_PRIVATE)
@@ -116,4 +119,17 @@ class PlacarActivity : AppCompatActivity() {
         }
         startActivity(intent)
     }
-}
+    fun pauseTime(v: View) {
+       val c = findViewById<Chronometer>(R.id.simpleChronometer)
+       timeIs = (c.getBase() - SystemClock.elapsedRealtime()).toInt();
+       c.stop()
+       findViewById<Button>(R.id.pausa).setVisibility(View.INVISIBLE)
+       findViewById<Button>(R.id.despausa).setVisibility(View.VISIBLE)
+    }
+    fun unpauseTime(v: View) {
+        val c = findViewById<Chronometer>(R.id.simpleChronometer);
+        c.setBase(SystemClock.elapsedRealtime() + timeIs);
+        c.start()
+        findViewById<Button>(R.id.despausa).setVisibility(View.INVISIBLE)
+        findViewById<Button>(R.id.pausa).setVisibility(View.VISIBLE)
+    }}
